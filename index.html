@@ -715,9 +715,9 @@ function fbSet(kind, html, autoMs) {
 }
 function fbClear() { var el = $('fb'); if (el) { el.className = 'fb hidden'; el.innerHTML = ''; } }
 function itemBrief(t) {
-  return '<div class="kv"><span>Cần lấy</span><b>' + esc(t.ITEM_CODE) + '</b></div>' +
-         '<div class="kv"><span>Tên</span><b>' + esc(t.ITEM_NAME_VN || '') + '</b></div>' +
-         '<div class="kv"><span>SL cần lấy</span><b>' + fmt(t.remaining > 0 ? t.remaining : t.required) + ' ' + esc(t.UNIT || '') + '</b></div>';
+  return '<div class="kv"><span>Mã hàng pick</span><b>' + esc(t.ITEM_CODE) + '</b></div>' +
+         '<div class="kv"><span>Tên hàng pick</span><b>' + esc(t.ITEM_NAME_VN || '') + '</b></div>' +
+         '<div class="kv"><span>Số lượng pick</span><b>' + fmt(t.remaining > 0 ? t.remaining : t.required) + ' ' + esc(t.UNIT || '') + '</b></div>';
 }
 function manualBox(ph) {
   return '<div class="card" style="padding:10px"><div class="muted" style="margin-bottom:6px">Hoặc dùng máy quét cầm tay / gõ tay:</div>' +
