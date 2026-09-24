@@ -616,7 +616,10 @@ function loadOrders() {
   showBusy('Đang tải Picking List…');
   return apiT('apiListPickingLists', [{}]).then(function (list) {
     hideBusy();
-    S.orders = list.filter(function (l) { return l.status !== 'DONE'; });
+    // [SỬA] Phiếu đã Confirm (DONE) HOẶC đã Hoàn tất trên Mobile và đang
+    // khoá chờ máy tính xác nhận (LOCKED) đều không còn việc gì để làm trên
+    // Mobile nữa — ẩn khỏi danh sách, giống hệt cách DONE đã bị ẩn từ trước.
+    S.orders = list.filter(function (l) { return l.status !== 'DONE' && l.status !== 'LOCKED'; });
     go('orders');
   }).catch(function (e) { failToScreen(e, loadOrders); });
 }
@@ -625,7 +628,7 @@ function rOrders() {
   var last = ''; try { last = sessionStorage.getItem('pbm_last') || ''; } catch (e) {}
   var html = '';
   if (S.orders.length === 0) {
-    html = '<div class="card"><h2>Không có Picking Order nào cần lấy hàng</h2><div class="muted">Bấm ↻ để tải lại. Phiếu đã Confirm sẽ không hiện ở đây.</div></div>';
+    html = '<div class="card"><h2>Không có Picking Order nào cần lấy hàng</h2><div class="muted">Bấm ↻ để tải lại. Phiếu đã Confirm hoặc đã Hoàn tất (đang khoá chờ máy tính xác nhận) sẽ không hiện ở đây.</div></div>';
   } else {
     html = S.orders.map(function (o) {
       var resume = (o.PICKING_NO === last) ? '<div style="color:var(--blue);font-weight:800;font-size:14px">↪ Đang làm dở — bấm để tiếp tục</div>' : '';
@@ -664,7 +667,7 @@ function rTasks() {
       '<div style="font-weight:800;margin-top:4px">' + fmt(t.picked) + ' / ' + fmt(t.required) + ' ' + esc(t.UNIT || '') + '</div></div>' +
       '<span class="chip ' + t.status.toLowerCase() + '">' + t.status + '</span></div>';
   }).join('');
-  html += '<button class="btn green" id="btnFinish">✔ Hoàn tất phiếu (Confirm Picking List)</button>';
+  html += '<button class="btn green" id="btnFinish">✔ Hoàn tất phiếu (đánh dấu Picked, khoá lại)</button>';
   $('app').innerHTML = html;
   Array.prototype.forEach.call(document.querySelectorAll('[data-i]'), function (el) {
     el.onclick = function () { openTask(Number(el.getAttribute('data-i'))); };
@@ -715,9 +718,9 @@ function fbSet(kind, html, autoMs) {
 }
 function fbClear() { var el = $('fb'); if (el) { el.className = 'fb hidden'; el.innerHTML = ''; } }
 function itemBrief(t) {
-  return '<div class="kv"><span>Mã hàng pick</span><b>' + esc(t.ITEM_CODE) + '</b></div>' +
-         '<div class="kv"><span>Tên hàng pick</span><b>' + esc(t.ITEM_NAME_VN || '') + '</b></div>' +
-         '<div class="kv"><span>Số lượng pick</span><b>' + fmt(t.remaining > 0 ? t.remaining : t.required) + ' ' + esc(t.UNIT || '') + '</b></div>';
+  return '<div class="kv"><span>Cần lấy</span><b>' + esc(t.ITEM_CODE) + '</b></div>' +
+         '<div class="kv"><span>Tên</span><b>' + esc(t.ITEM_NAME_VN || '') + '</b></div>' +
+         '<div class="kv"><span>SL cần lấy</span><b>' + fmt(t.remaining > 0 ? t.remaining : t.required) + ' ' + esc(t.UNIT || '') + '</b></div>';
 }
 function manualBox(ph) {
   return '<div class="card" style="padding:10px"><div class="muted" style="margin-bottom:6px">Hoặc dùng máy quét cầm tay / gõ tay:</div>' +
@@ -913,73 +916,60 @@ function verifyPending() {
   });
 }
 
-/* ---------- Hoàn tất phiếu = Precheck + Confirm CÓ SẴN (trừ tồn, tạo Outbound) ---------- */
+/**
+ * ---------- Hoàn tất phiếu (Mobile) ----------
+ * [SỬA] Mobile KHÔNG còn được trừ tồn kho nữa. "Hoàn tất phiếu" giờ chỉ gọi
+ * apiFinishMobilePicking (mới) — đánh dấu phiếu Picked xong và KHOÁ lại,
+ * không đụng Stock/Outbound. apiPrecheckPicking/apiConfirmPicking (trừ tồn
+ * thật) đã bị gỡ khỏi cổng doPost nên không gọi được từ đây nữa — việc trừ
+ * tồn (Precheck + Confirm) chỉ còn làm được từ WMS trên máy tính, sau khi
+ * xem lại/mở khoá nếu cần.
+ */
 function openFinish() {
-  showBusy('Đang kiểm tra phiếu…');
-  fetchDetail().then(function (d) {
-    S.tasks = buildTasks(d);
-    return apiT('apiPrecheckPicking', [S.pickingNo]);
-  }).then(function (pc) { hideBusy(); S.finish = pc; go('finish'); }).catch(function (e) { failToScreen(e, openFinish); });
+  showBusy('Đang tải phiếu…');
+  fetchDetail().then(function (d) { hideBusy(); S.tasks = buildTasks(d); go('finish'); })
+    .catch(function (e) { failToScreen(e, openFinish); });
 }
 function rFinish() {
-  var pc = S.finish || {};
   setHeader('Hoàn tất phiếu', S.pickingNo, { back: true });
-  var h = '';
-  if (pc.alreadyConfirmed) {
-    h = '<div class="card"><h2>Phiếu này đã được Confirm</h2><div class="muted">Không thể chỉnh sửa nữa.</div></div>' +
-        '<button class="btn" id="btnToOrders">Về danh sách phiếu</button>';
-  } else {
-    var tot = 0, req = 0; S.tasks.forEach(function (t) { tot += t.picked; req += t.required; });
-    h = '<div class="card"><h2>Tóm tắt</h2><div class="stats">' +
-        '<div class="stat req"><b>' + fmt(r6(req)) + '</b><span>REQUIRED</span></div>' +
-        '<div class="stat pk"><b>' + fmt(r6(tot)) + '</b><span>PICKED</span></div>' +
-        '<div class="stat rem"><b>' + fmt(r6(Math.max(0, req - tot))) + '</b><span>THIẾU</span></div></div></div>';
-    (pc.blocking || []).forEach(function (b) { h += '<div class="badbox"><b>⛔ ' + esc(b.ITEM_CODE) + ' @ ' + esc(b.LOCATION) + '</b><br>' + esc(b.message) + '</div>'; });
-    (pc.warnings || []).forEach(function (w) { h += '<div class="warnbox"><b>⚠ ' + esc(w.ITEM_CODE) + ' @ ' + esc(w.LOCATION) + '</b><br>' + esc(w.message) + '</div>'; });
-    if (pc.canConfirm) {
-      if ((pc.warnings || []).length > 0) h += '<label class="chk"><input type="checkbox" id="chkOk"> Tôi đã kiểm tra các cảnh báo trên</label>';
-      h += '<button class="btn green" id="btnDoConfirm" ' + ((pc.warnings || []).length ? 'disabled' : '') + '>✔ Confirm Picking List (trừ tồn kho)</button>';
-    } else {
-      h += '<div class="badbox"><b>Không thể Confirm</b> — xử lý các mục ⛔ ở trên trước (liên hệ quản lý kho).</div>';
-    }
-    h += '<button class="btn ghost" id="btnBackTasks">◀ Quay lại danh sách Item</button>';
-  }
-  $('app').innerHTML = h;
-  if ($('btnToOrders')) $('btnToOrders').onclick = loadOrders;
-  if ($('btnBackTasks')) $('btnBackTasks').onclick = function () { go('tasks'); };
-  if ($('chkOk')) $('chkOk').onchange = function () { $('btnDoConfirm').disabled = !$('chkOk').checked; };
-  if ($('btnDoConfirm')) $('btnDoConfirm').onclick = doConfirm;
-}
-function doConfirm() {
-  if (S.busy) return;
+  var tot = 0, req = 0; S.tasks.forEach(function (t) { tot += t.picked; req += t.required; });
   var short = S.tasks.filter(function (t) { return t.picked < t.required; }).length;
-  confirmDlg('Confirm Picking List?', 'Hệ thống sẽ <b>TRỪ TỒN KHO</b> và tạo phiếu Outbound theo Store.<br><b>Không thể hoàn tác.</b>' +
-    (short ? '<br><br>⚠ Còn <b>' + short + '</b> Item chưa lấy đủ.' : ''), 'Confirm').then(function (yes) {
+  var h = '<div class="card"><h2>Tóm tắt</h2><div class="stats">' +
+      '<div class="stat req"><b>' + fmt(r6(req)) + '</b><span>REQUIRED</span></div>' +
+      '<div class="stat pk"><b>' + fmt(r6(tot)) + '</b><span>PICKED</span></div>' +
+      '<div class="stat rem"><b>' + fmt(r6(Math.max(0, req - tot))) + '</b><span>THIẾU</span></div></div></div>';
+  if (short > 0) h += '<div class="warnbox"><b>⚠ Còn ' + short + ' Item chưa lấy đủ.</b><br>Vẫn có thể Hoàn tất — nhân viên văn phòng sẽ kiểm tra lại trên máy tính trước khi Confirm.</div>';
+  h += '<div class="okbox" style="background:#fff4e6;border-color:var(--amber);color:#8a5a00;">🔒 Sau khi Hoàn tất, phiếu sẽ KHOÁ lại — không sửa được Picked Quantity nữa. Việc trừ tồn kho (Confirm) chỉ thực hiện trên máy tính.</div>';
+  h += '<button class="btn green" id="btnDoFinish">✔ Hoàn tất phiếu (đánh dấu Picked)</button>';
+  h += '<button class="btn ghost" id="btnBackTasks">◀ Quay lại danh sách Item</button>';
+  $('app').innerHTML = h;
+  $('btnBackTasks').onclick = function () { go('tasks'); };
+  $('btnDoFinish').onclick = doFinish;
+}
+function doFinish() {
+  if (S.busy) return;
+  confirmDlg('Hoàn tất phiếu?', 'Phiếu sẽ được đánh dấu <b>Picked</b> và <b>KHOÁ lại</b> — không sửa được số lượng nữa trên điện thoại.<br>' +
+    'Phiếu <b>CHƯA bị trừ tồn kho</b>; nhân viên văn phòng sẽ xem lại và Confirm (trừ tồn) trên máy tính.', 'Hoàn tất').then(function (yes) {
     if (!yes) return;
-    showBusy('Đang Confirm & trừ tồn kho…');
-    apiT('apiConfirmPicking', [S.pickingNo], 120000).then(function (res) { hideBusy(); S.finish = res; try { sessionStorage.removeItem('pbm_last'); } catch (e) {} beep(true); vib(200); go('done'); })
-      .catch(function (err) {
-        if (err && err.network) {
-          // Không biết đã Confirm chưa → hỏi lại trạng thái thật, KHÔNG gọi lại mù quáng
-          apiT('apiPrecheckPicking', [S.pickingNo]).then(function (pc) {
-            hideBusy();
-            if (pc.alreadyConfirmed) { S.finish = { confirmed: true, outboundDocs: [], deductedCount: '?', zeroSkippedCount: '?' }; go('done'); }
-            else { toast('Chưa Confirm được (mất kết nối). Bấm lại để thử.', 'bad'); }
-          }).catch(function () { hideBusy(); toast('Mất kết nối. Hãy kiểm tra lại trạng thái phiếu trước khi Confirm lại.', 'bad'); });
-        } else handleErr(err);
-      });
+    showBusy('Đang hoàn tất…');
+    apiT('apiFinishMobilePicking', [S.pickingNo], 60000).then(function (res) {
+      hideBusy(); S.finish = res; try { sessionStorage.removeItem('pbm_last'); } catch (e) {} beep(true); vib(200); go('done');
+    }).catch(function (err) {
+      if (err && err.network) {
+        // Không biết đã khoá chưa → gọi lại apiFinishMobilePicking: hàm này
+        // idempotent (bấm/gọi lại nhiều lần không lỗi, xem Picking.gs), nên
+        // an toàn thử lại thẳng thay vì phải hỏi trạng thái riêng.
+        apiT('apiFinishMobilePicking', [S.pickingNo], 60000).then(function (res) {
+          hideBusy(); S.finish = res; try { sessionStorage.removeItem('pbm_last'); } catch (e) {} beep(true); vib(200); go('done');
+        }).catch(function () { hideBusy(); toast('Mất kết nối. Hãy kiểm tra lại trạng thái phiếu rồi bấm Hoàn tất lại.', 'bad'); });
+      } else handleErr(err);
+    });
   });
 }
 function rDone() {
-  var r = S.finish || {};
   setHeader('Hoàn tất', S.pickingNo);
-  var docs = (r.outboundDocs || []).map(function (d) {
-    return '<div class="kv"><span>' + esc(d.STORE_CODE || '') + ' ' + esc(d.STORE_NAME || '') + '</span><b>' + esc(d.OUTBOUND_NO) + '</b></div>';
-  }).join('');
-  $('app').innerHTML = '<div class="card"><div class="okbox" style="font-size:22px">✔ Confirm thành công</div>' +
-    '<div class="kv"><span>Dòng đã trừ tồn</span><b>' + esc(r.deductedCount) + '</b></div>' +
-    '<div class="kv"><span>Dòng bỏ qua (Picked = 0)</span><b>' + esc(r.zeroSkippedCount) + '</b></div>' +
-    (docs ? '<h2 style="margin-top:14px">Outbound đã tạo</h2>' + docs : '') + '</div>' +
+  $('app').innerHTML = '<div class="card"><div class="okbox" style="font-size:22px">✔ Đã hoàn tất phiếu</div>' +
+    '<div class="muted" style="margin-top:8px">Phiếu đã được đánh dấu Picked và khoá lại. Phiếu <b>chưa trừ tồn kho</b> — nhân viên văn phòng sẽ xem lại và Confirm (trừ tồn kho, tạo Outbound) trên máy tính.</div></div>' +
     '<button class="btn" id="btnToOrders">Về danh sách phiếu</button>';
   $('btnToOrders').onclick = loadOrders;
 }
