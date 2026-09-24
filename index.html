@@ -377,7 +377,7 @@ function isInAppBrowser() { return /(Zalo|FBAN|FBAV|FB_IAB|Instagram|Line\/|Micr
 /* ---------- Gọi Apps Script (qua cổng doPost) ---------- */
 function callApi(fn, args, timeoutMs) {
   if (!API_URL || API_URL.indexOf('PASTE_APPS_SCRIPT') !== -1) {
-    return Promise.reject(makeErr('Trang chưa được cấu hình API_URL. Hãy dán link Web App (/exec) vào đầu file index.html.', false));
+    return Promise.reject(makeErr('Trang chưa được cấu hình API_URL. Hãy thêm link Web App (/exec) vào đầu file index.html.', false));
   }
   if (navigator.onLine === false) return Promise.reject(makeErr('Không có mạng. Kiểm tra WiFi/4G rồi thử lại.', true));
   var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -395,7 +395,7 @@ function callApi(fn, args, timeoutMs) {
   }).then(function (txt) {
     dbg('api ' + fn + ' ' + (Date.now() - t0) + 'ms');
     var res;
-    try { res = JSON.parse(txt); } catch (e) { throw makeErr('Máy chủ trả về dữ liệu không hợp lệ. Kiểm tra lại API_URL và quyền truy cập "Anyone" của Web App.', true); }
+    try { res = JSON.parse(txt); } catch (e) { throw makeErr('Máy chủ trả về dữ liệu không hợp lệ. Kiểm tra lại API_URL và quyền truy cập  Web App.', true); }
     if (!res.success) {
       var e2 = makeErr(res.error || 'Lỗi không xác định.', false);
       if (String(res.error || '').indexOf('Phiên đăng nhập hết hạn') !== -1) e2.expired = true;
@@ -579,14 +579,14 @@ function render() {
 
 /* ---------- Login ---------- */
 function rLogin() {
-  setHeader('Picking By Mobile', 'AFVN Warehouse');
+  setHeader('Picking By Mobile', 'TRANCY-AFVN | WMS');
   var savedUser = ''; try { savedUser = localStorage.getItem('pbm_user') || ''; } catch (e) {}
   $('app').innerHTML =
     '<div class="card"><h2>Đăng nhập</h2>' +
     '<label class="lb">User ID</label><input class="tx" id="lgUser" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="' + esc(savedUser) + '">' +
     '<label class="lb">Password</label><div class="pwrow"><input class="tx" id="lgPass" type="password" autocomplete="current-password"><button type="button" id="lgShow">Hiện</button></div>' +
     '<button class="btn" id="lgBtn">Login</button><div class="err" id="lgErr"></div></div>' +
-    '<div class="muted" style="text-align:center">Dùng cùng tài khoản WMS (quyền AD/WH).</div>';
+    '<div class="muted" style="text-align:center">Dùng cùng tài khoản WMS.</div>';
   function submit() {
     if (S.busy) return;
     var u = $('lgUser').value.trim(), p = $('lgPass').value;
@@ -702,7 +702,7 @@ function camMount() {
     '<div class="camview" id="camView"><div id="camSlot"></div><div class="camframe"></div><div class="camchip" id="camChip"></div>' +
     '<div class="camctl"><button id="camTorch" class="hidden">🔦</button><button id="camOff">✕ Tắt</button></div>' +
     '<div class="camhint" id="camHint"></div><div class="cammsg" id="camMsg"></div></div>' +
-    '<button class="btn" id="camOn">📷 Bật camera</button></div>';
+    '<button class="btn" id="camOn">📷 Bật Camera</button></div>';
   $('camWrap').onclick = function (e) {
     var id = e.target && e.target.id; Cam.touch();
     if (id === 'camOn' || id === 'camRetry') { S.camOn = true; try { localStorage.setItem('pbm_cam', '1'); } catch (x) {} Cam.stop('manual-restart'); Cam.start(handleScan); }
@@ -718,12 +718,12 @@ function fbSet(kind, html, autoMs) {
 }
 function fbClear() { var el = $('fb'); if (el) { el.className = 'fb hidden'; el.innerHTML = ''; } }
 function itemBrief(t) {
-  return '<div class="kv"><span>Cần lấy</span><b>' + esc(t.ITEM_CODE) + '</b></div>' +
-         '<div class="kv"><span>Tên</span><b>' + esc(t.ITEM_NAME_VN || '') + '</b></div>' +
-         '<div class="kv"><span>SL cần lấy</span><b>' + fmt(t.remaining > 0 ? t.remaining : t.required) + ' ' + esc(t.UNIT || '') + '</b></div>';
+  return '<div class="kv"><span>Mã hàng:</span><b>' + esc(t.ITEM_CODE) + '</b></div>' +
+         '<div class="kv"><span>Tên hàng:</span><b>' + esc(t.ITEM_NAME_VN || '') + '</b></div>' +
+         '<div class="kv"><span>Số lượng pick:</span><b>' + fmt(t.remaining > 0 ? t.remaining : t.required) + ' ' + esc(t.UNIT || '') + '</b></div>';
 }
 function manualBox(ph) {
-  return '<div class="card" style="padding:10px"><div class="muted" style="margin-bottom:6px">Hoặc dùng máy quét cầm tay / gõ tay:</div>' +
+  return '<div class="card" style="padding:10px"><div class="muted" style="margin-bottom:6px">Hoặc dùng máy quét hoặc nhập tay:</div>' +
     '<div class="row2" style="gap:8px"><input class="tx" id="manIn" placeholder="' + esc(ph) + '" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" style="height:52px;font-size:18px">' +
     '<button class="btn sm" id="manOk" style="margin:0;flex:0 0 84px;min-height:52px">OK</button></div></div>';
 }
@@ -755,7 +755,7 @@ function renderTaskBody() {
     if (saved) {
       h += '<div class="okbox">✔ Đã lưu số lượng</div>' +
            '<div class="sticky"><button class="btn green" id="btnNext">Next Item ➜</button></div>' +
-           '<button class="btn ghost sm" id="btnEdit">✎ Sửa số lượng đã lấy</button>';
+           '<button class="btn ghost sm" id="btnEdit">✎ Sửa số lượng đã pick</button>';
     } else {
       var label = S.qtyMode === 'add' ? 'Pick Qty (lần này)' : 'Tổng đã lấy (đặt lại)';
       h += '<div class="card"><label class="lb" style="margin-top:0">' + label + '</label>' +
@@ -833,7 +833,7 @@ function handleScan(text, manual) {
     fbSet('bad', '<div class="t">' + esc(r.title) + '</div>' +
       '<div class="row">Expected<span class="big exp">' + esc(r.expected) + '</span></div>' +
       '<div class="row">Scanned<span class="big got">' + esc(r.scanned) + '</span></div>' +
-      (r.hint ? '<div class="hint">👉 ' + esc(r.hint) + '</div>' : '') + '<div class="hint">Không có gì bị thay đổi. Quét lại đúng mã.</div>', 0);
+      (r.hint ? '<div class="hint">👉 ' + esc(r.hint) + '</div>' : '') + '<div class="hint">Quét lại đúng mã.</div>', 0);
   }
 }
 
@@ -938,9 +938,9 @@ function rFinish() {
       '<div class="stat req"><b>' + fmt(r6(req)) + '</b><span>REQUIRED</span></div>' +
       '<div class="stat pk"><b>' + fmt(r6(tot)) + '</b><span>PICKED</span></div>' +
       '<div class="stat rem"><b>' + fmt(r6(Math.max(0, req - tot))) + '</b><span>THIẾU</span></div></div></div>';
-  if (short > 0) h += '<div class="warnbox"><b>⚠ Còn ' + short + ' Item chưa lấy đủ.</b><br>Vẫn có thể Hoàn tất — nhân viên văn phòng sẽ kiểm tra lại trên máy tính trước khi Confirm.</div>';
-  h += '<div class="okbox" style="background:#fff4e6;border-color:var(--amber);color:#8a5a00;">🔒 Sau khi Hoàn tất, phiếu sẽ KHOÁ lại — không sửa được Picked Quantity nữa. Việc trừ tồn kho (Confirm) chỉ thực hiện trên máy tính.</div>';
-  h += '<button class="btn green" id="btnDoFinish">✔ Hoàn tất phiếu (đánh dấu Picked)</button>';
+  if (short > 0) h += '<div class="warnbox"><b>⚠ Còn ' + short + ' Item chưa lấy đủ.</b><br>Vẫn có thể Hoàn tất — Kiểm tra lại trên hệ thống trước khi Confirm.</div>';
+  h += '<div class="okbox" style="background:#fff4e6;border-color:var(--amber);color:#8a5a00;">🔒 Sau khi Hoàn tất, phiếu sẽ KHOÁ — không sửa được Picked Quantity nữa.</div>';
+  h += '<button class="btn green" id="btnDoFinish">✔ Hoàn tất phiếu.</button>';
   h += '<button class="btn ghost" id="btnBackTasks">◀ Quay lại danh sách Item</button>';
   $('app').innerHTML = h;
   $('btnBackTasks').onclick = function () { go('tasks'); };
@@ -948,8 +948,8 @@ function rFinish() {
 }
 function doFinish() {
   if (S.busy) return;
-  confirmDlg('Hoàn tất phiếu?', 'Phiếu sẽ được đánh dấu <b>Picked</b> và <b>KHOÁ lại</b> — không sửa được số lượng nữa trên điện thoại.<br>' +
-    'Phiếu <b>CHƯA bị trừ tồn kho</b>; nhân viên văn phòng sẽ xem lại và Confirm (trừ tồn) trên máy tính.', 'Hoàn tất').then(function (yes) {
+  confirmDlg('Hoàn tất phiếu?', 'Phiếu sẽ được đánh dấu <b>Picked</b> và <b>KHOÁ lại</b> — không sửa được số lượng.<br>' +
+    'Phiếu <b>CHƯA bị trừ tồn kho</b>; Xem lại và Confirm (trừ tồn) trên hệ thống.', 'Hoàn tất').then(function (yes) {
     if (!yes) return;
     showBusy('Đang hoàn tất…');
     apiT('apiFinishMobilePicking', [S.pickingNo], 60000).then(function (res) {
@@ -969,7 +969,7 @@ function doFinish() {
 function rDone() {
   setHeader('Hoàn tất', S.pickingNo);
   $('app').innerHTML = '<div class="card"><div class="okbox" style="font-size:22px">✔ Đã hoàn tất phiếu</div>' +
-    '<div class="muted" style="margin-top:8px">Phiếu đã được đánh dấu Picked và khoá lại. Phiếu <b>chưa trừ tồn kho</b> — nhân viên văn phòng sẽ xem lại và Confirm (trừ tồn kho, tạo Outbound) trên máy tính.</div></div>' +
+    '<div class="muted" style="margin-top:8px">Phiếu đã được đánh dấu Picked và khoá lại. Phiếu <b>chưa trừ tồn kho</b> — Kiểm tra lại và Confirm (trừ tồn kho, tạo Outbound).</div></div>' +
     '<button class="btn" id="btnToOrders">Về danh sách phiếu</button>';
   $('btnToOrders').onclick = loadOrders;
 }
